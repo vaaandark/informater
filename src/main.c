@@ -1,13 +1,63 @@
 #include "parser.h"
 #include <getopt.h>
 
+void Node_display_simply(Node n, int indent) {
+    for (int i = 0; i < indent; ++i) {
+        printf("  ");
+    }
+    if (n->is_leaf) {
+        printf("%s\n", n->token.str);
+    } else {
+        printf("%s\n", node_type_strings[n->t]);
+        for (int i = 0; i < n->num; ++i) {
+            Node_display_simply(n->sons[i], indent + 1);
+        }
+    }
+}
+
+void print_string(FILE *f, char *s) {
+    while (*s != '\0') {
+        if (*s == '\"') {
+            fputs("\\\"", f);
+        } else {
+            fputc(*s, f);
+        }
+        s++;
+    }
+}
+
+void Node_display(FILE *f, Node n) {
+    if (n->is_leaf) {
+        fprintf(f, "    nd%p [label=\"", n);
+        print_string(f, n->token.str);
+        fprintf(f, "\" style=filled];\n");
+    } else {
+        fprintf(f, "    nd%p [label=\"%s\"];\n",
+                n, node_type_strings[n->t]);
+        for (int i = 0; i < n->num; ++i) {
+            fprintf(f, "    nd%p->nd%p;\n", n, n->sons[i]);
+            Node_display(f, n->sons[i]);
+        }
+    }
+}
+
+void AST2graph(FILE *f, Node n) {
+    fprintf(f, "digraph AST {\n");
+    fprintf(f, "    label=\"抽象语法树\"");
+    fprintf(f, "    labelloc=top;\n");
+    fprintf(f, "    labeljust=left;\n");
+    Node_display(f, n);
+    fprintf(f, "}\n");
+}
+
 void help(void) {
     unimplemented("thers is no manual now");
 }
 
 int main(int argc, char *argv[]) {
     FILE *fp = stdout;
-    bool oflag = false;
+    bool redirect = false;
+    bool generate_ast = false;
     int opt;
     while ((opt = getopt(argc, argv, "ho:t")) != -1) {
         switch (opt) {
@@ -15,7 +65,7 @@ int main(int argc, char *argv[]) {
             help();
             exit(0);
         case 'o':
-            oflag = true;
+            redirect = true;
             fp = fopen(optarg, "w");
             if (fp == NULL) {
                 fprintf(stderr, "informater: cannot open %s\n", optarg);
@@ -23,7 +73,7 @@ int main(int argc, char *argv[]) {
             }
             break;
         case 't':
-            unimplemented("AST is not supported");
+            generate_ast = true;
             break;
         default:
             break;
@@ -34,12 +84,19 @@ int main(int argc, char *argv[]) {
     }
 
     Lex_TokenState st = Lex_lexer_go(argv[optind]);
-    LexS_display(fp, &st);
+
+    Node n = parser_go(st);
+    if (generate_ast) {
+        FILE *fp_dot = fopen("./AST-graph.dot", "w");
+        AST2graph(fp_dot, n);
+        fclose(fp_dot);
+    }
 
     LexS_drop(&st);
 
-    if (oflag) {
+    if (redirect) {
         fclose(fp);
     }
+
     return 0;
 }

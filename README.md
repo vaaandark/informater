@@ -22,12 +22,12 @@ $ mkdir build
 $ make all
 ```
 
-会在`./build`目录生成两个可执行文件`ast2graph`和`informater`。
+会在`./build`目录生成可执行文件`informater`。
 
 
 ## 测试和使用
 
-可以查看`./build/RE-tree.svg`文件，它包含了正则表达式编译的中间结果。
+可以查看`./build/AST-graph.svg`文件，它是生成的抽象语法树。
 
 ```console
 $ ./tests/draw.sh example/test-01.c

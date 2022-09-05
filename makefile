@@ -6,11 +6,11 @@ IRREGEXSOURCE=src/irregex
 SOURCEDIR=src
 BUILDDIR=build
 OBJECTS=$(BUILDDIR)/re.o $(BUILDDIR)/NFA.o $(BUILDDIR)/irregex.o \
-		$(BUILDDIR)/lexer.o $(BUILDDIR)/parser.o $(BUILDDIR)/err.o
+		$(BUILDDIR)/lexer.o $(BUILDDIR)/parser.o $(BUILDDIR)/err.o \
+		$(BUILDDIR)/main.o
 
-all: $(OBJECTS) $(BUILDDIR)/main.o $(BUILDDIR)/ast2graph.o
-	$(CC) $(CFLAGS) $(OBJECTS) $(BUILDDIR)/main.o -o $(BUILDDIR)/informater
-	$(CC) $(CFLAGS) $(OBJECTS) $(BUILDDIR)/ast2graph.o -o $(BUILDDIR)/ast2graph
+all: $(OBJECTS)
+	$(CC) $(CFLAGS) $(OBJECTS) -o $(BUILDDIR)/informater
 
 $(BUILDDIR)/re.o: $(IRREGEXSOURCE)/def.h
 	$(CC) $(CFLAGS) -c $(IRREGEXSOURCE)/re.c -o $(BUILDDIR)/re.o
@@ -32,9 +32,6 @@ $(BUILDDIR)/parser.o: $(SOURCEDIR)/lexer.h $(SOURCEDIR)/def.h $(SOURCEDIR)/err.h
 
 $(BUILDDIR)/main.o: $(SOURCEDIR)/parser.h
 	$(CC) $(CFLAGS) -c $(SOURCEDIR)/main.c -o $(BUILDDIR)/main.o
-
-$(BUILDDIR)/ast2graph.o: $(SOURCEDIR)/parser.h
-	$(CC) $(CFLAGS) -c $(SOURCEDIR)/ast2graph.c -o $(BUILDDIR)/ast2graph.o
 
 .PHONY: clean
 clean:

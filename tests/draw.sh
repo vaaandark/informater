@@ -9,6 +9,6 @@ path="$(pwd)/$1"
 
 cd "$(dirname "$0")" || exit 1
 cd ../build/ || exit 1
-./ast2graph "$path"
+./informater -t "$path"
 dot -Tsvg AST-graph.dot -o AST-graph.svg
 
