@@ -1,4 +1,3 @@
-CC=clang
 #SANITIZE=-fsanitize=address
 CFLAGS=-std=c99 -Wall -Wextra -Werror -Wshadow $(SANITIZE) -O2
 IRREGEXSOURCE=src/irregex
