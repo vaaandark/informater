@@ -18,16 +18,6 @@ static inline Lex_Token TS_get_token(TokenStream *s) {
     return s->tokens[s->pos++];
 }
 
-// 使 Token 流回退一个 Token
-//static inline void TS_unget_token(TokenStream *s) {
-//    s->pos--;
-//}
-
-//// 使 Token 流回退 n 个 Token
-//static inline void TS_unget_ntokens(TokenStream *s, int n) {
-//    s->pos -= n;
-//}
-
 // 判断是否是 Token 流结尾
 static inline bool TS_end_of_token(TokenStream *s) {
     return s->pos >= s->size;
@@ -74,7 +64,20 @@ static Node Node_new(void) {
     Node n = (Node)malloc(sizeof(struct node));
     n->num = 0;
     n->t = ND_UNDEFINED;
+    n->comment = NULL;
     return n;
+}
+
+void Node_drop(Node n) {
+    if (!n->is_leaf) {
+        for (int i = 0; i < n->num; ++i) {
+            Node_drop(n->sons[i]);
+        }
+        if (n->comment != NULL) {
+            Node_drop(n->comment);
+        }
+    }
+    free(n);
 }
 
 // 创建一个 AST 非叶子节点
@@ -94,11 +97,11 @@ static Node Node_new_leaf(Lex_Token t) {
 }
 
 // 给节点 n 添加儿子节点 s
-static void Node_add_son(Node *n, Node s) {
-    if ((*n)->num == SONSMAX) {
+static void Node_add_son(Node n, Node s) {
+    if (n->num == SONSMAX) {
         panic("too many sons for a node");
     }
-    (*n)->sons[(*n)->num++] = s;
+    n->sons[n->num++] = s;
 }
 
 
@@ -120,7 +123,7 @@ Node parse_trans_unit(TokenStream *s) {
     if (TS_end_of_token(s)) {
         fmt_panic(0, 0, "EOF", "empty file");
     }
-    Node_add_son(&res, parse_external_decl_cons(s));
+    Node_add_son(res, parse_external_decl_cons(s));
     return res;
 }
 
@@ -131,8 +134,32 @@ extern Node parse_external_var_decl(TokenStream *);
 Node parse_preprocess(TokenStream *s) {
 //    puts("call parse_preprocess");
     Node res = Node_new_normal(ND_PREPROCESS);
-    Node_add_son(&res, Node_new_leaf(TS_get_token(s)));
+    Node_add_son(res, Node_new_leaf(TS_get_token(s)));
     return res;
+}
+
+// 解析注释
+Node parse_comment(TokenStream *s) {
+    Node res = Node_new_normal(ND_COMMENT);
+    Node_add_son(res, Node_new_leaf(TS_get_token(s)));
+    return res;
+}
+
+// 解析注释序列
+Node parse_comment_cons(TokenStream *s) {
+    Node res = Node_new_normal(ND_COMMENT);
+    Node_add_son(res, Node_new_leaf(TS_get_token(s)));
+    if (TS_peek(s, 0).type == COMMENT_T) {
+        Node_add_son(res, parse_comment_cons(s));
+    }
+    return res;
+}
+
+// 向 AST 插入注释
+void check_and_add_comment(Node n, TokenStream *s) {
+    if (TS_peek(s, 0).type == COMMENT_T) {
+        n->comment = parse_comment_cons(s);
+    }
 }
 
 // 解析外部定义
@@ -143,10 +170,11 @@ Node parse_preprocess(TokenStream *s) {
 Node parse_external_decl(TokenStream *s) {
 //    puts("call parse_external_decl");
     Node res = Node_new_normal(ND_EXTERNAL_DECL);
+    check_and_add_comment(res, s);
     Lex_Token t = TS_peek(s, 0);
     switch (t.type) {
         case PREPROCESSOR_COMMAND_T: // 预处理
-            Node_add_son(&res, parse_preprocess(s));
+            Node_add_son(res, parse_preprocess(s));
             break;
         case IDENTIFIER_T: // 自定义类型或别名
             unimplemented("user defined type or typedef");
@@ -159,9 +187,9 @@ Node parse_external_decl(TokenStream *s) {
         case SHORT_T:
         case VOID_T: // 函数定义（声明）或外部变量声明
             if (!TS_nend_of_token(s, 3) && TS_peek(s, 2).type == LEFT_PARETHESIS_T) {
-                Node_add_son(&res, parse_func_decl(s));
+                Node_add_son(res, parse_func_decl(s));
             } else {
-                Node_add_son(&res, parse_external_var_decl(s));
+                Node_add_son(res, parse_external_var_decl(s));
             }
             break;
         default:
@@ -178,9 +206,10 @@ Node parse_external_decl(TokenStream *s) {
 Node parse_external_decl_cons(TokenStream *s) {
 //    puts("call parse_external_decl_cons");
     Node res = Node_new_normal(ND_EXTERNAL_DECL_CONS);
-    Node_add_son(&res, parse_external_decl(s));
+    check_and_add_comment(res, s);
+    Node_add_son(res, parse_external_decl(s));
     if (!TS_end_of_token(s)) {
-        Node_add_son(&res, parse_external_decl_cons(s));
+        Node_add_son(res, parse_external_decl_cons(s));
     }
     return res;
 }
@@ -193,11 +222,12 @@ extern Node parse_var_cons(TokenStream *);
 Node parse_external_var_decl(TokenStream *s) {
 //    puts("call parse_local_var_decl");
     Node res = Node_new_normal(ND_EXTERNAL_VAR_DECL);
+    check_and_add_comment(res, s);
     if (!in_range(TS_peek(s, 0).type, type_spec_range)) {
         res->t = ND_EMPTY;
     } else {
-        Node_add_son(&res, Node_new_leaf(TS_get_token(s)));
-        Node_add_son(&res, parse_var_cons(s));
+        Node_add_son(res, Node_new_leaf(TS_get_token(s)));
+        Node_add_son(res, parse_var_cons(s));
         Lex_Token t;
         if ((t = TS_get_token(s)).type != SEMICOLON_T) {
             fmt_panic_with_expect(t.line, t.column, t.str, ";",
@@ -216,10 +246,11 @@ extern Node parse_array(TokenStream *s);
 // 有一个或者两个儿子节点
 Node parse_var_cons(TokenStream *s) {
     Node res = Node_new_normal(ND_VAR_CONS);
+    check_and_add_comment(res, s);
     if (TS_peek(s, 1).type == LEFT_SQUARE_BRACKET_T) {
-        Node_add_son(&res, parse_array(s));
+        Node_add_son(res, parse_array(s));
     } else {
-        Node_add_son(&res, Node_new_leaf(TS_get_token(s)));
+        Node_add_son(res, Node_new_leaf(TS_get_token(s)));
     }
     Lex_Token t = TS_peek(s, 0);
     if (t.type == COMMA_T) {
@@ -228,7 +259,7 @@ Node parse_var_cons(TokenStream *s) {
             fmt_panic_with_expect(t.line, t.column, t.str, "indentifier",
                     "wrong variable declaration");
         }
-        Node_add_son(&res, parse_var_cons(s));
+        Node_add_son(res, parse_var_cons(s));
     }
     return res;
 }
@@ -244,16 +275,17 @@ extern Node parse_compound(TokenStream *s);
 //      函数名 ::= 标识符
 Node parse_func_decl(TokenStream *s) {
     Node res = Node_new_normal(ND_FUNC_DECL);
+    check_and_add_comment(res, s);
 
-    Node_add_son(&res, Node_new_leaf(TS_get_token(s)));
-    Node_add_son(&res, Node_new_leaf(TS_get_token(s)));
+    Node_add_son(res, Node_new_leaf(TS_get_token(s)));
+    Node_add_son(res, Node_new_leaf(TS_get_token(s)));
 
     Lex_Token t = TS_get_token(s);
     if (t.type != LEFT_PARETHESIS_T) {
         fmt_panic_with_expect(t.line, t.column, t.str,
                 "(", "wrong function declaration");
     }
-    Node_add_son(&res, parse_arg_cons(s));
+    Node_add_son(res, parse_arg_cons(s));
 
     t = TS_get_token(s);
     if (t.type != RIGHT_PARETHESIS_T) { // 吞掉 ')'
@@ -265,7 +297,7 @@ Node parse_func_decl(TokenStream *s) {
         fmt_panic_with_expect(t.line, t.column, t.str,
                 "{", "wrong function declaration");
     }
-    Node_add_son(&res, parse_compound(s));
+    Node_add_son(res, parse_compound(s));
     return res;
 }
 
@@ -274,10 +306,11 @@ Node parse_func_decl(TokenStream *s) {
 // 有两个儿子节点，都是叶子节点
 Node parse_arg(TokenStream *s) {
     Node res = Node_new_normal(ND_ARG);
+    check_and_add_comment(res, s);
     Lex_Token t = TS_peek(s, 0);
-    Node_add_son(&res, Node_new_leaf(TS_get_token(s)));
+    Node_add_son(res, Node_new_leaf(TS_get_token(s)));
     if (t.type != VOID_T) {
-        Node_add_son(&res, Node_new_leaf(TS_get_token(s)));
+        Node_add_son(res, Node_new_leaf(TS_get_token(s)));
     }
     return res;
 }
@@ -287,16 +320,17 @@ Node parse_arg(TokenStream *s) {
 // 有一个或者两个儿子节点
 Node parse_arg_cons(TokenStream *s) {
     Node res = Node_new_normal(ND_ARG_CONS);
+    check_and_add_comment(res, s);
     Lex_Token t = TS_peek(s, 0);
     if (in_range(t.type, type_spec_range)) {
-        Node_add_son(&res, parse_arg(s));
+        Node_add_son(res, parse_arg(s));
     } else {
         fmt_panic(t.line, t.column, t.str, "wrong arguments");
     }
     t = TS_peek(s, 0);
     if (t.type == COMMA_T) {
         TS_get_token(s);
-        Node_add_son(&res, parse_arg_cons(s));
+        Node_add_son(res, parse_arg_cons(s));
     }
     return res;
 }
@@ -309,14 +343,15 @@ extern Node parse_local_var_decl_cons(TokenStream *s);
 // 有两个儿子节点
 Node parse_compound(TokenStream *s) {
     Node res = Node_new_normal(ND_COMPOUND);
+    check_and_add_comment(res, s);
     Lex_Token t = TS_get_token(s);
     if (t.type != LEFT_BRACE_T) {
         fmt_panic_with_expect(t.line, t.column, t.str,
                 "{", "wrong compoud statement");
     }
-    Node_add_son(&res, parse_local_var_decl_cons(s));
+    Node_add_son(res, parse_local_var_decl_cons(s));
     if (TS_peek(s, 0).type != RIGHT_BRACE_T) {
-        Node_add_son(&res, parse_statement_cons(s));
+        Node_add_son(res, parse_statement_cons(s));
     }
     if ((t = TS_get_token(s)).type != RIGHT_BRACE_T) { // 吞掉 '}'
         fmt_panic_with_expect(t.line, t.column, t.str,
@@ -330,18 +365,19 @@ Node parse_compound(TokenStream *s) {
 // 有一个或者两个儿子节点
 Node parse_local_var_decl_cons(TokenStream *s) {
     Node res = Node_new_normal(ND_LOCAL_VAR_DECL_CONS);
+    check_and_add_comment(res, s);
     if (!in_range(TS_peek(s, 0).type, type_spec_range)) {
         res->t = ND_EMPTY;
     } else {
         Lex_Token t = TS_peek(s, 0);
         if (in_range(t.type, type_spec_range)) {
-            Node_add_son(&res, parse_local_var_decl(s));
+            Node_add_son(res, parse_local_var_decl(s));
         } else {
             fmt_panic(t.line, t.column, t.str, "wrong local variable declaration");
         }
         t = TS_peek(s, 0);
         if (in_range(t.type, type_spec_range)) {
-            Node_add_son(&res, parse_local_var_decl_cons(s));
+            Node_add_son(res, parse_local_var_decl_cons(s));
         }
     }
     return res;
@@ -352,8 +388,9 @@ Node parse_local_var_decl_cons(TokenStream *s) {
 // 有两个儿子节点
 Node parse_local_var_decl(TokenStream *s) {
     Node res = Node_new_normal(ND_LOCAL_VAR_DECL);
-    Node_add_son(&res, Node_new_leaf(TS_get_token(s)));
-    Node_add_son(&res, parse_var_cons(s));
+    check_and_add_comment(res, s);
+    Node_add_son(res, Node_new_leaf(TS_get_token(s)));
+    Node_add_son(res, parse_var_cons(s));
     TS_get_token(s); // 吞掉 ';'
     return res;
 }
@@ -365,10 +402,11 @@ extern Node parse_statement(TokenStream *);
 // 有一个或者两个儿子节点
 Node parse_statement_cons(TokenStream *s) {
     Node res = Node_new_normal(ND_STATEMENT_CONS);
-    Node_add_son(&res, parse_statement(s));
+    check_and_add_comment(res, s);
+    Node_add_son(res, parse_statement(s));
     Lex_Token t = TS_peek(s, 0);
     if (!TS_end_of_token(s) && t.type != RIGHT_BRACE_T) {
-        Node_add_son(&res, parse_statement_cons(s));
+        Node_add_son(res, parse_statement_cons(s));
     }
     return res;
 }
@@ -378,10 +416,11 @@ extern Node parse_exp(TokenStream *);
 // 解析返回语句
 Node parse_return(TokenStream *s) {
     Node res = Node_new_normal(ND_RETURN);
+    check_and_add_comment(res, s);
     TS_get_token(s);
     Lex_Token t = TS_peek(s, 0);
     if (t.type != SEMICOLON_T) {
-        Node_add_son(&res, parse_exp(s));
+        Node_add_son(res, parse_exp(s));
     }
     return res;
 }
@@ -389,6 +428,7 @@ Node parse_return(TokenStream *s) {
 // 解析 if 语句
 Node parse_if(TokenStream *s) {
     Node res = Node_new_normal(ND_IF);
+    check_and_add_comment(res, s);
 
     TS_get_token(s);
     Lex_Token t = TS_get_token(s);
@@ -397,7 +437,7 @@ Node parse_if(TokenStream *s) {
                 "(", "wrong function declaration");
     }
 
-    Node_add_son(&res, parse_exp(s));
+    Node_add_son(res, parse_exp(s));
 
     t = TS_get_token(s);
     if (t.type != RIGHT_PARETHESIS_T) {
@@ -405,12 +445,12 @@ Node parse_if(TokenStream *s) {
                 ")", "wrong function declaration");
     }
 
-    Node_add_son(&res, parse_compound(s));
+    Node_add_son(res, parse_compound(s));
 
     t = TS_peek(s, 0);
     if (t.type == ELSE_T) {
         TS_get_token(s);
-        Node_add_son(&res, parse_compound(s));
+        Node_add_son(res, parse_compound(s));
     }
 
     return res;
@@ -419,6 +459,7 @@ Node parse_if(TokenStream *s) {
 // 解析 while
 Node parse_while(TokenStream *s) {
     Node res = Node_new_normal(ND_WHILE);
+    check_and_add_comment(res, s);
     TS_get_token(s);
     
     Lex_Token t = TS_get_token(s);
@@ -427,7 +468,7 @@ Node parse_while(TokenStream *s) {
                 "(", "wrong function declaration");
     }
 
-    Node_add_son(&res, parse_exp(s));
+    Node_add_son(res, parse_exp(s));
 
     t = TS_get_token(s);
     if (t.type != RIGHT_PARETHESIS_T) {
@@ -435,7 +476,7 @@ Node parse_while(TokenStream *s) {
                 ")", "wrong function declaration");
     }
 
-    Node_add_son(&res, parse_compound(s));
+    Node_add_son(res, parse_compound(s));
 
     return res;
 }
@@ -443,6 +484,7 @@ Node parse_while(TokenStream *s) {
 // 解析 for
 Node parse_for(TokenStream *s) {
     Node res = Node_new_normal(ND_FOR);
+    check_and_add_comment(res, s);
     TS_get_token(s);
     
     Lex_Token t = TS_get_token(s);
@@ -451,7 +493,7 @@ Node parse_for(TokenStream *s) {
                 "(", "wrong 'for' statement");
     }
 
-    Node_add_son(&res, parse_exp(s));
+    Node_add_son(res, parse_exp(s));
 
     t = TS_get_token(s);
     if (t.type != SEMICOLON_T) {
@@ -459,7 +501,7 @@ Node parse_for(TokenStream *s) {
                 ";", "wrong 'for' statement");
     }
 
-    Node_add_son(&res, parse_exp(s));
+    Node_add_son(res, parse_exp(s));
 
     t = TS_get_token(s);
     if (t.type != SEMICOLON_T) {
@@ -467,7 +509,7 @@ Node parse_for(TokenStream *s) {
                 ";", "wrong 'for' statement");
     }
 
-    Node_add_son(&res, parse_exp(s));
+    Node_add_son(res, parse_exp(s));
 
     t = TS_get_token(s);
     if (t.type != RIGHT_PARETHESIS_T) {
@@ -475,7 +517,7 @@ Node parse_for(TokenStream *s) {
                 ")", "wrong function declaration");
     }
 
-    Node_add_son(&res, parse_compound(s));
+    Node_add_son(res, parse_compound(s));
 
     return res;
 }
@@ -490,33 +532,34 @@ Node parse_for(TokenStream *s) {
 //          break; | continue;
 Node parse_statement(TokenStream *s) {
     Node res = Node_new_normal(ND_STATEMENT);
+    check_and_add_comment(res, s);
     Lex_Token t;
     switch (TS_peek(s, 0).type) {
         case RETURN_T:
-            Node_add_son(&res, parse_return(s));
+            Node_add_son(res, parse_return(s));
             goto swallow_semi;
             break;
         case IF_T:
-            Node_add_son(&res, parse_if(s));
+            Node_add_son(res, parse_if(s));
             break;
         case WHILE_T:
-            Node_add_son(&res, parse_while(s));
+            Node_add_son(res, parse_while(s));
             break;
         case FOR_T:
-            Node_add_son(&res, parse_for(s));
+            Node_add_son(res, parse_for(s));
             break;
         case BREAK_T:
             TS_get_token(s);
-            Node_add_son(&res, Node_new_normal(ND_BREAK));
+            Node_add_son(res, Node_new_normal(ND_BREAK));
             goto swallow_semi;
             break;
         case CONTINUE_T:
             TS_get_token(s);
-            Node_add_son(&res, Node_new_normal(ND_CONTINUE));
+            Node_add_son(res, Node_new_normal(ND_CONTINUE));
             goto swallow_semi;
             break;
         default:
-            Node_add_son(&res, parse_exp(s));
+            Node_add_son(res, parse_exp(s));
 swallow_semi:
             t = TS_get_token(s);
             if (t.type != SEMICOLON_T) {
@@ -533,7 +576,8 @@ extern Node parse_real_arg_cons(TokenStream *);
 // 解析函数调用
 Node parse_func_call(TokenStream *s) {
     Node res = Node_new_normal(ND_FUNC_CALL);
-    Node_add_son(&res, Node_new_leaf(TS_get_token(s)));
+    check_and_add_comment(res, s);
+    Node_add_son(res, Node_new_leaf(TS_get_token(s)));
 
     Lex_Token t = TS_get_token(s);
     if (t.type != LEFT_PARETHESIS_T) {
@@ -541,7 +585,7 @@ Node parse_func_call(TokenStream *s) {
                 "(", "wrong function call");
     }
 
-    Node_add_son(&res, parse_real_arg_cons(s));
+    Node_add_son(res, parse_real_arg_cons(s));
 
     t = TS_get_token(s);
     if (t.type != RIGHT_PARETHESIS_T) {
@@ -555,18 +599,19 @@ Node parse_func_call(TokenStream *s) {
 //// 解析赋值语句
 //Node parse_assignment(TokenStream *s) {
 //    Node res = Node_new_normal(ND_ASSIGNMENT);
-//    Node_add_son(&res, Node_new_leaf(TS_get_token(s)));
+//    Node_add_son(res, Node_new_leaf(TS_get_token(s)));
 //    TS_get_token(s);
-//    Node_add_son(&res, parse_exp(s));
+//    Node_add_son(res, parse_exp(s));
 //    return res;
 //}
 
 // 解析数组
 Node parse_array(TokenStream *s) {
     Node res = Node_new_normal(ND_ARRAY);
-    Node_add_son(&res, Node_new_leaf(TS_get_token(s)));
+    check_and_add_comment(res, s);
+    Node_add_son(res, Node_new_leaf(TS_get_token(s)));
     TS_get_token(s);
-    Node_add_son(&res, parse_exp(s));
+    Node_add_son(res, parse_exp(s));
     Lex_Token t = TS_get_token(s);
     if (t.type != RIGHT_SQUARE_BRACKET_T) {
         fmt_panic_with_expect(t.line, t.column, t.str,
@@ -581,6 +626,7 @@ Node parse_array(TokenStream *s) {
 //                标识符(实参序列) | 标识符[表达式] |
 Node parse_simple_exp(TokenStream *s) {
     Node res = Node_new_normal(ND_EXP);
+    check_and_add_comment(res, s);
     Lex_Token t;
     switch (TS_peek(s, 0).type) {
         case HEX_FLOAT_CONST_T:
@@ -590,16 +636,16 @@ Node parse_simple_exp(TokenStream *s) {
         case HEX_CONST_T:
         case STR_LITERAL_T:
         case CHARACTER_T: // 常量数字
-            Node_add_son(&res, Node_new_leaf(TS_get_token(s)));
+            Node_add_son(res, Node_new_leaf(TS_get_token(s)));
             break;
         case IDENTIFIER_T:
             // TODO
             if (TS_peek(s, 1).type == LEFT_PARETHESIS_T) { // 函数调用
-                Node_add_son(&res, parse_func_call(s));
+                Node_add_son(res, parse_func_call(s));
             } else if (TS_peek(s, 1).type == LEFT_SQUARE_BRACKET_T) { // 数组
-                Node_add_son(&res, parse_array(s));
+                Node_add_son(res, parse_array(s));
             } else { // 只有一个标识符
-                Node_add_son(&res, Node_new_leaf(TS_get_token(s)));
+                Node_add_son(res, Node_new_leaf(TS_get_token(s)));
             }
             break;
         default:
@@ -622,12 +668,13 @@ Node parse_simple_exp(TokenStream *s) {
 Node parse_exp(TokenStream *s) {
     Node res = NULL;
     Node exp = parse_simple_exp(s);
+    check_and_add_comment(exp, s);
     Lex_Token t = TS_peek(s, 0);
     if (!in_range(t.type, exp_end_range)) {
         res = Node_new_normal(ND_EXP);
-        Node_add_son(&res, exp);
-        Node_add_son(&res, Node_new_leaf(TS_get_token(s)));
-        Node_add_son(&res, parse_exp(s));
+        Node_add_son(res, exp);
+        Node_add_son(res, Node_new_leaf(TS_get_token(s)));
+        Node_add_son(res, parse_exp(s));
     } else {
         res = exp;
     }
@@ -639,11 +686,12 @@ Node parse_exp(TokenStream *s) {
 // 有一个或者两个儿子节点
 Node parse_real_arg_cons(TokenStream *s) {
     Node res = Node_new_normal(ND_REAL_ARG_CONS);
+    check_and_add_comment(res, s);
     // TODO
-    Node_add_son(&res, parse_exp(s));
+    Node_add_son(res, parse_exp(s));
     if (TS_peek(s, 0).type == COMMA_T) {
         TS_get_token(s);
-        Node_add_son(&res, parse_real_arg_cons(s));
+        Node_add_son(res, parse_real_arg_cons(s));
     }
     return res;
 }

@@ -12,6 +12,9 @@ void Node_display_simply(Node n, int indent) {
         for (int i = 0; i < n->num; ++i) {
             Node_display_simply(n->sons[i], indent + 1);
         }
+        if (n->comment != NULL) {
+            Node_display_simply(n->comment, indent + 1);
+        }
     }
 }
 
@@ -38,6 +41,10 @@ void Node_display(FILE *f, Node n) {
             fprintf(f, "    nd%p->nd%p;\n", n, n->sons[i]);
             Node_display(f, n->sons[i]);
         }
+        if (n->comment != NULL) {
+            fprintf(f, "    nd%p->nd%p;\n", n, n->comment);
+            Node_display(f, n->comment);
+        }
     }
 }
 
@@ -56,10 +63,11 @@ void help(void) {
 
 int main(int argc, char *argv[]) {
     FILE *fp = stdout;
+    FILE *fp_dot = stdout;
     bool redirect = false;
     bool generate_ast = false;
     int opt;
-    while ((opt = getopt(argc, argv, "ho:t")) != -1) {
+    while ((opt = getopt(argc, argv, "ho:t:")) != -1) {
         switch (opt) {
         case 'h':
             help();
@@ -74,6 +82,11 @@ int main(int argc, char *argv[]) {
             break;
         case 't':
             generate_ast = true;
+            fp_dot = fopen(optarg, "w");
+            if (fp_dot == NULL) {
+                fprintf(stderr, "informater: cannot open %s\n", optarg);
+                exit(1);
+            }
             break;
         default:
             break;
@@ -87,10 +100,10 @@ int main(int argc, char *argv[]) {
 
     Node n = parser_go(st);
     if (generate_ast) {
-        FILE *fp_dot = fopen("./AST-graph.dot", "w");
         AST2graph(fp_dot, n);
         fclose(fp_dot);
     }
+    Node_drop(n);
 
     LexS_drop(&st);
 
