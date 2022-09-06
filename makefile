@@ -5,8 +5,8 @@ IRREGEXSOURCE=src/irregex
 SOURCEDIR=src
 BUILDDIR=build
 OBJECTS=$(BUILDDIR)/re.o $(BUILDDIR)/NFA.o $(BUILDDIR)/irregex.o \
-		$(BUILDDIR)/lexer.o $(BUILDDIR)/parser.o $(BUILDDIR)/err.o \
-		$(BUILDDIR)/main.o
+		$(BUILDDIR)/lexer.o $(BUILDDIR)/fmt.o $(BUILDDIR)/parser.o \
+		$(BUILDDIR)/err.o $(BUILDDIR)/main.o
 
 all: $(OBJECTS)
 	$(CC) $(CFLAGS) $(OBJECTS) -o $(BUILDDIR)/informater
@@ -29,7 +29,10 @@ $(BUILDDIR)/err.o:
 $(BUILDDIR)/parser.o: $(SOURCEDIR)/lexer.h $(SOURCEDIR)/def.h $(SOURCEDIR)/err.h
 	$(CC) $(CFLAGS) -c $(SOURCEDIR)/parser.c -o $(BUILDDIR)/parser.o
 
-$(BUILDDIR)/main.o: $(SOURCEDIR)/parser.h
+$(BUILDDIR)/fmt.o: $(SOURCEDIR)/parser.h
+	$(CC) $(CFLAGS) -c $(SOURCEDIR)/fmt.c -o $(BUILDDIR)/fmt.o
+
+$(BUILDDIR)/main.o: $(SOURCEDIR)/fmt.h
 	$(CC) $(CFLAGS) -c $(SOURCEDIR)/main.c -o $(BUILDDIR)/main.o
 
 .PHONY: clean

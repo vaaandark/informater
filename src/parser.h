@@ -6,13 +6,13 @@
     X(ND_UNDEFINED, "未定义") X(ND_EMPTY, "空节点") X(ND_PREPROCESS, "预处理") \
     X(ND_TRANS_UNIT, "程序") X(ND_EXTERNAL_DECL, "外部定义") \
     X(ND_COMMENT, "注释") X(ND_EXTERNAL_DECL_CONS, "外部定义序列") \
-    X(ND_EXTERNAL_VAR_DECL, "变量的外部定义") \
-    X(ND_FUNC_DECL, "函数定义") X(ND_TYPE_SPEC, "类型说明符") \
+    X(ND_EXTERNAL_VAR_DECL, "变量的外部定义") X(ND_FUNC_DEF, "函数定义")\
+    X(ND_FUNC_DECL, "函数声明") X(ND_TYPE_SPEC, "类型说明符") \
     X(ND_VAR, "变量") X(ND_VAR_CONS, "变量序列") X(ND_FUNC_NAME, "函数名") \
     X(ND_ARG, "函数形参") X(ND_ARG_CONS, "函数形参序列") X(ND_EXP, "表达式") \
     X(ND_STATEMENT_CONS, "语句序列") X(ND_STATEMENT, "语句") \
     X(ND_COMPOUND, "复合语句") X(ND_IDENT, "标识符") \
-    X(ND_LOCAL_VAR_DECL, "局部变量定义") \
+    X(ND_LOCAL_VAR_DECL, "局部变量定义") X(ND_COMMENT_CONS, "注释序列") \
     X(ND_LOCAL_VAR_DECL_CONS, "局部变量定义序列") \
     X(ND_RETURN, "return") X(ND_IF, "if") X(ND_REAL_ARG_CONS, "函数实参序列") \
     X(ND_FUNC_CALL, "函数调用") X(ND_ARRAY, "数组") X(ND_WHILE, "while") \

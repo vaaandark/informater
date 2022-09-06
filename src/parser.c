@@ -4,6 +4,13 @@
 const char *node_type_strings[] = { NodeType_enum };
 #undef X
 
+static Node parse_trans_unit(TokenStream *);
+
+Node parser_go(Lex_TokenState st) {
+    TokenStream s = TS_new(st);
+    return parse_trans_unit(&s);
+}
+
 // 创建一个 Token 流
 TokenStream TS_new(Lex_TokenState st) {
     return (TokenStream) {
@@ -105,19 +112,12 @@ static void Node_add_son(Node n, Node s) {
 }
 
 
-extern Node parse_trans_unit(TokenStream *);
-
-Node parser_go(Lex_TokenState st) {
-    TokenStream s = TS_new(st);
-    return parse_trans_unit(&s);
-}
-
-extern Node parse_external_decl_cons(TokenStream *);
+static Node parse_external_decl_cons(TokenStream *);
 
 // 解析程序
 // 程序 ::= 外部定义序列
 // 有一个儿子节点
-Node parse_trans_unit(TokenStream *s) {
+static Node parse_trans_unit(TokenStream *s) {
 //    puts("call parse_trans_unit");
     Node res = Node_new_normal(ND_TRANS_UNIT);
     if (TS_end_of_token(s)) {
@@ -127,11 +127,11 @@ Node parse_trans_unit(TokenStream *s) {
     return res;
 }
 
-extern Node parse_func_decl(TokenStream *);
-extern Node parse_external_var_decl(TokenStream *);
+static Node parse_func_decl_or_def(TokenStream *);
+static Node parse_external_var_decl(TokenStream *);
 
 // 解析预处理语句
-Node parse_preprocess(TokenStream *s) {
+static Node parse_preprocess(TokenStream *s) {
 //    puts("call parse_preprocess");
     Node res = Node_new_normal(ND_PREPROCESS);
     Node_add_son(res, Node_new_leaf(TS_get_token(s)));
@@ -139,16 +139,16 @@ Node parse_preprocess(TokenStream *s) {
 }
 
 // 解析注释
-Node parse_comment(TokenStream *s) {
+static Node parse_comment(TokenStream *s) {
     Node res = Node_new_normal(ND_COMMENT);
     Node_add_son(res, Node_new_leaf(TS_get_token(s)));
     return res;
 }
 
 // 解析注释序列
-Node parse_comment_cons(TokenStream *s) {
-    Node res = Node_new_normal(ND_COMMENT);
-    Node_add_son(res, Node_new_leaf(TS_get_token(s)));
+static Node parse_comment_cons(TokenStream *s) {
+    Node res = Node_new_normal(ND_COMMENT_CONS);
+    Node_add_son(res, parse_comment(s));
     if (TS_peek(s, 0).type == COMMENT_T) {
         Node_add_son(res, parse_comment_cons(s));
     }
@@ -156,7 +156,7 @@ Node parse_comment_cons(TokenStream *s) {
 }
 
 // 向 AST 插入注释
-void check_and_add_comment(Node n, TokenStream *s) {
+static void check_and_add_comment(Node n, TokenStream *s) {
     if (TS_peek(s, 0).type == COMMENT_T) {
         n->comment = parse_comment_cons(s);
     }
@@ -167,8 +167,7 @@ void check_and_add_comment(Node n, TokenStream *s) {
 //              函数定义 |
 //              预处理语句
 // 有一个儿子节点
-Node parse_external_decl(TokenStream *s) {
-//    puts("call parse_external_decl");
+static Node parse_external_decl(TokenStream *s) {
     Node res = Node_new_normal(ND_EXTERNAL_DECL);
     check_and_add_comment(res, s);
     Lex_Token t = TS_peek(s, 0);
@@ -187,7 +186,7 @@ Node parse_external_decl(TokenStream *s) {
         case SHORT_T:
         case VOID_T: // 函数定义（声明）或外部变量声明
             if (!TS_nend_of_token(s, 3) && TS_peek(s, 2).type == LEFT_PARETHESIS_T) {
-                Node_add_son(res, parse_func_decl(s));
+                Node_add_son(res, parse_func_decl_or_def(s));
             } else {
                 Node_add_son(res, parse_external_var_decl(s));
             }
@@ -203,8 +202,7 @@ Node parse_external_decl(TokenStream *s) {
 // 外部定义序列 ::= 外部定义 外部定义序列 | 外部定义
 // 以一个广义表的二叉树形式存储
 // 有一个或者两个儿子节点
-Node parse_external_decl_cons(TokenStream *s) {
-//    puts("call parse_external_decl_cons");
+static Node parse_external_decl_cons(TokenStream *s) {
     Node res = Node_new_normal(ND_EXTERNAL_DECL_CONS);
     check_and_add_comment(res, s);
     Node_add_son(res, parse_external_decl(s));
@@ -214,13 +212,12 @@ Node parse_external_decl_cons(TokenStream *s) {
     return res;
 }
 
-extern Node parse_var_cons(TokenStream *);
+static Node parse_var_cons(TokenStream *);
 
 // 解析外部变量定义
 // 外部变量定义 ::= 类型说明符 变量序列;
 // 有两个儿子节点
-Node parse_external_var_decl(TokenStream *s) {
-//    puts("call parse_local_var_decl");
+static Node parse_external_var_decl(TokenStream *s) {
     Node res = Node_new_normal(ND_EXTERNAL_VAR_DECL);
     check_and_add_comment(res, s);
     if (!in_range(TS_peek(s, 0).type, type_spec_range)) {
@@ -237,14 +234,14 @@ Node parse_external_var_decl(TokenStream *s) {
     return res;
 }
 
-extern Node parse_array(TokenStream *s);
+static Node parse_array(TokenStream *s);
 
 // 解析变量序列
 // 变量序列 ::= 变量, 变量序列 | 变量
 // 以一个广义表的二叉树形式存储
 //      变量 ::= 标识符
 // 有一个或者两个儿子节点
-Node parse_var_cons(TokenStream *s) {
+static Node parse_var_cons(TokenStream *s) {
     Node res = Node_new_normal(ND_VAR_CONS);
     check_and_add_comment(res, s);
     if (TS_peek(s, 1).type == LEFT_SQUARE_BRACKET_T) {
@@ -264,17 +261,17 @@ Node parse_var_cons(TokenStream *s) {
     return res;
 }
 
-extern Node parse_arg_cons(TokenStream *s);
-extern Node parse_statement_cons(TokenStream *s);
-extern Node parse_compound(TokenStream *s);
+static Node parse_arg_cons(TokenStream *s);
+static Node parse_statement_cons(TokenStream *s);
+static Node parse_compound(TokenStream *s);
 
-// 解析函数定义
+// 解析函数定义或函数声明
 // 函数定义 ::= 类型说明符 函数名 (形式参数列表) 复合语句
 // 对应地，函数定义节点有以上四个子节点
 //      类型说明符 ::= int | float | char
 //      函数名 ::= 标识符
-Node parse_func_decl(TokenStream *s) {
-    Node res = Node_new_normal(ND_FUNC_DECL);
+static Node parse_func_decl_or_def(TokenStream *s) {
+    Node res = Node_new_normal(ND_FUNC_DEF);
     check_and_add_comment(res, s);
 
     Node_add_son(res, Node_new_leaf(TS_get_token(s)));
@@ -293,18 +290,23 @@ Node parse_func_decl(TokenStream *s) {
                 ")", "wrong function declaration");
     }
 
-    if ((t = TS_peek(s, 0)).type != LEFT_BRACE_T) {
+    t = TS_peek(s, 0);
+    if (t.type == SEMICOLON_T) {
+        TS_get_token(s);
+        res->t = ND_FUNC_DECL;
+    } else if (t.type == LEFT_BRACE_T) {
+        Node_add_son(res, parse_compound(s));
+    } else {
         fmt_panic_with_expect(t.line, t.column, t.str,
-                "{", "wrong function declaration");
+                "'{' or ';'", "wrong function declaration or define");
     }
-    Node_add_son(res, parse_compound(s));
     return res;
 }
 
 // 解析形式参数
 // 形式参数 ::= 类型说明符 标识符
 // 有两个儿子节点，都是叶子节点
-Node parse_arg(TokenStream *s) {
+static Node parse_arg(TokenStream *s) {
     Node res = Node_new_normal(ND_ARG);
     check_and_add_comment(res, s);
     Lex_Token t = TS_peek(s, 0);
@@ -318,7 +320,7 @@ Node parse_arg(TokenStream *s) {
 // 解析形式参数序列
 // 形式参数序列 ::= 形式参数, 形式参数序列 | 空
 // 有一个或者两个儿子节点
-Node parse_arg_cons(TokenStream *s) {
+static Node parse_arg_cons(TokenStream *s) {
     Node res = Node_new_normal(ND_ARG_CONS);
     check_and_add_comment(res, s);
     Lex_Token t = TS_peek(s, 0);
@@ -335,13 +337,13 @@ Node parse_arg_cons(TokenStream *s) {
     return res;
 }
 
-extern Node parse_local_var_decl(TokenStream *);
-extern Node parse_local_var_decl_cons(TokenStream *s);
+static Node parse_local_var_decl(TokenStream *);
+static Node parse_local_var_decl_cons(TokenStream *s);
 
 // 解析复合语句
 // 复合语句 ::= { 局部变量定义序列 语句序列 }
 // 有两个儿子节点
-Node parse_compound(TokenStream *s) {
+static Node parse_compound(TokenStream *s) {
     Node res = Node_new_normal(ND_COMPOUND);
     check_and_add_comment(res, s);
     Lex_Token t = TS_get_token(s);
@@ -363,7 +365,7 @@ Node parse_compound(TokenStream *s) {
 // 解析局部变量定义序列
 // 局部变量定义序列 ::= 局部变量定义 局部变量定义序列 | 空
 // 有一个或者两个儿子节点
-Node parse_local_var_decl_cons(TokenStream *s) {
+static Node parse_local_var_decl_cons(TokenStream *s) {
     Node res = Node_new_normal(ND_LOCAL_VAR_DECL_CONS);
     check_and_add_comment(res, s);
     if (!in_range(TS_peek(s, 0).type, type_spec_range)) {
@@ -386,7 +388,7 @@ Node parse_local_var_decl_cons(TokenStream *s) {
 // 解析局部变量定义
 // 局部变量定义 ::= 类型说明符 变量序列 ;
 // 有两个儿子节点
-Node parse_local_var_decl(TokenStream *s) {
+static Node parse_local_var_decl(TokenStream *s) {
     Node res = Node_new_normal(ND_LOCAL_VAR_DECL);
     check_and_add_comment(res, s);
     Node_add_son(res, Node_new_leaf(TS_get_token(s)));
@@ -395,12 +397,12 @@ Node parse_local_var_decl(TokenStream *s) {
     return res;
 }
 
-extern Node parse_statement(TokenStream *);
+static Node parse_statement(TokenStream *);
 
 // 解析语句序列
 // 语句序列 ::= 语句 语句序列 | 空
 // 有一个或者两个儿子节点
-Node parse_statement_cons(TokenStream *s) {
+static Node parse_statement_cons(TokenStream *s) {
     Node res = Node_new_normal(ND_STATEMENT_CONS);
     check_and_add_comment(res, s);
     Node_add_son(res, parse_statement(s));
@@ -411,10 +413,10 @@ Node parse_statement_cons(TokenStream *s) {
     return res;
 }
 
-extern Node parse_exp(TokenStream *);
+static Node parse_exp(TokenStream *);
 
 // 解析返回语句
-Node parse_return(TokenStream *s) {
+static Node parse_return(TokenStream *s) {
     Node res = Node_new_normal(ND_RETURN);
     check_and_add_comment(res, s);
     TS_get_token(s);
@@ -426,7 +428,7 @@ Node parse_return(TokenStream *s) {
 }
 
 // 解析 if 语句
-Node parse_if(TokenStream *s) {
+static Node parse_if(TokenStream *s) {
     Node res = Node_new_normal(ND_IF);
     check_and_add_comment(res, s);
 
@@ -457,7 +459,7 @@ Node parse_if(TokenStream *s) {
 }
 
 // 解析 while
-Node parse_while(TokenStream *s) {
+static Node parse_while(TokenStream *s) {
     Node res = Node_new_normal(ND_WHILE);
     check_and_add_comment(res, s);
     TS_get_token(s);
@@ -482,7 +484,7 @@ Node parse_while(TokenStream *s) {
 }
 
 // 解析 for
-Node parse_for(TokenStream *s) {
+static Node parse_for(TokenStream *s) {
     Node res = Node_new_normal(ND_FOR);
     check_and_add_comment(res, s);
     TS_get_token(s);
@@ -530,7 +532,7 @@ Node parse_for(TokenStream *s) {
 //          while (表达式) 复合语句 |
 //          for (表达式; 表达式; 表达式) 复合语句 |
 //          break; | continue;
-Node parse_statement(TokenStream *s) {
+static Node parse_statement(TokenStream *s) {
     Node res = Node_new_normal(ND_STATEMENT);
     check_and_add_comment(res, s);
     Lex_Token t;
@@ -571,10 +573,10 @@ swallow_semi:
     return res;
 }
 
-extern Node parse_real_arg_cons(TokenStream *);
+static Node parse_real_arg_cons(TokenStream *);
 
 // 解析函数调用
-Node parse_func_call(TokenStream *s) {
+static Node parse_func_call(TokenStream *s) {
     Node res = Node_new_normal(ND_FUNC_CALL);
     check_and_add_comment(res, s);
     Node_add_son(res, Node_new_leaf(TS_get_token(s)));
@@ -606,7 +608,7 @@ Node parse_func_call(TokenStream *s) {
 //}
 
 // 解析数组
-Node parse_array(TokenStream *s) {
+static Node parse_array(TokenStream *s) {
     Node res = Node_new_normal(ND_ARRAY);
     check_and_add_comment(res, s);
     Node_add_son(res, Node_new_leaf(TS_get_token(s)));
@@ -624,7 +626,7 @@ Node parse_array(TokenStream *s) {
 // 解析简单表达式
 // 简单表达式 ::= 常量数字 | 标识符 |
 //                标识符(实参序列) | 标识符[表达式] |
-Node parse_simple_exp(TokenStream *s) {
+static Node parse_simple_exp(TokenStream *s) {
     Node res = Node_new_normal(ND_EXP);
     check_and_add_comment(res, s);
     Lex_Token t;
@@ -665,7 +667,7 @@ Node parse_simple_exp(TokenStream *s) {
 //      双目运算符号 ::= + | - | * | / | % |
 //                       == | != | > | < |
 //                       >= | <=
-Node parse_exp(TokenStream *s) {
+static Node parse_exp(TokenStream *s) {
     Node res = NULL;
     Node exp = parse_simple_exp(s);
     check_and_add_comment(exp, s);
@@ -684,7 +686,7 @@ Node parse_exp(TokenStream *s) {
 // 解析实参序列
 // 实参序列 ::= 表达式, 实参序列 | 空
 // 有一个或者两个儿子节点
-Node parse_real_arg_cons(TokenStream *s) {
+static Node parse_real_arg_cons(TokenStream *s) {
     Node res = Node_new_normal(ND_REAL_ARG_CONS);
     check_and_add_comment(res, s);
     // TODO
