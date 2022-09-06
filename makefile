@@ -1,7 +1,6 @@
 CC=clang
-SANITIZE=-fsanitize=address
-#CFLAGS=-std=c99 -Wall -Wextra -Werror -Wshadow $(SANITIZE) -g -O0
-CFLAGS=-std=c99 -Wall -Wextra -Wshadow $(SANITIZE) -g -O0
+#SANITIZE=-fsanitize=address
+CFLAGS=-std=c99 -Wall -Wextra -Werror -Wshadow $(SANITIZE) -O2
 IRREGEXSOURCE=src/irregex
 SOURCEDIR=src
 BUILDDIR=build
