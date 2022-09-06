@@ -88,6 +88,7 @@ const Lex_RegexTable regex_and_action[] = {
     { "(\\.)", "dot", DOT_T },
     { "(->)", "arrow", ARROW_T },
     { "(#(\\\\\n|[^\n])*)", "preprocessor command", PREPROCESSOR_COMMAND_T },
+    { "(\\n)", "\n", NEWLINE_T },
     { "([[:space:]]+)", "", SPACE_T }
 };
 
@@ -211,9 +212,11 @@ Lex_TokenState Lex_lexer_go(const char *filename) {
         tmp = pos[matched_len];
         pos[matched_len] = '\0';
         if (*regex_and_action[matched_item].token_name != '\0') {
-            LexS_add_token(&st, Lex_Token_new(line, pos - line_begin_pos,
-                        pos, regex_and_action[matched_item].type,
-                        regex_and_action[matched_item].token_name));
+            if (regex_and_action[matched_item].type != NEWLINE_T) {
+                LexS_add_token(&st, Lex_Token_new(line, pos - line_begin_pos,
+                            pos, regex_and_action[matched_item].type,
+                            regex_and_action[matched_item].token_name));
+            }
             char *place = pos + matched_len;
             if (another_line(pos, &place) || tmp == '\n') {
                 line++;
