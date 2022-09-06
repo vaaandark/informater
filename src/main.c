@@ -58,14 +58,25 @@ void AST2graph(FILE *f, Node n) {
 }
 
 void help(void) {
-    unimplemented("thers is no manual now");
+    printf("Usage: informater [options] file...\n");
+    printf("Options:\n");
+    printf("  -h                display this information\n");
+    printf("  -o after-file     redirect output to after-file\n");
+    printf("  -t ast-graph      generate a dot image with AST\n");
 }
 
 int main(int argc, char *argv[]) {
+    if (argc == 1) {
+        help();
+        exit(1);
+    }
+
     FILE *fp = stdout;
     FILE *fp_dot = stdout;
+
     bool redirect = false;
     bool generate_ast = false;
+
     int opt;
     while ((opt = getopt(argc, argv, "ho:t:")) != -1) {
         switch (opt) {
@@ -103,6 +114,9 @@ int main(int argc, char *argv[]) {
         AST2graph(fp_dot, n);
         fclose(fp_dot);
     }
+
+    formater_go(fp, n);
+
     Node_drop(n);
 
     LexS_drop(&st);

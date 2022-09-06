@@ -27,23 +27,30 @@ $ make all
 
 ## 测试和使用
 
-可以查看`./build/AST-graph.svg`文件，它是生成的抽象语法树。
+```console
+% ./build/informater
+Usage: informater [options] file...
+Options:
+  -h                display this information
+  -o after-file     redirect output to after-file
+  -t ast-graph      generate a dot image with AST
+```
+
+使用如下命令可以将`before.c`文件格式化为`after.c`文件，并将 AST 保存在`build/AST-graph.dot`中。如果不使用`-o`选项，格式化后的结果会直接输出。
 
 ```console
-$ ./tests/draw.sh example/test-01.c
+./build/informater -t build/AST-graph.dot -o after.c before.c
+```
+
+可以运行`test/draw.sh`，然后查看`./build/AST-graph.svg`文件，它是生成的抽象语法树。
+
+```console
+$ ./tests/draw.sh example/test-02.c
 $ for p in ./build/*.svg; do xdg-open $p; done
 ```
 ![ast-example](./images/AST-graph.svg)
 
 ## 缺陷
 
-还没有添加格式化功能。
-
-~~还有点漏内存，不过这个好解决。~~
-
 支持的语法不丰富。
-
-不支持函数声明。
-
-## 文档编写中...
 
