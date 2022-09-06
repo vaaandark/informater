@@ -165,6 +165,7 @@ static void check_and_add_comment(Node n, TokenStream *s) {
 // 解析外部定义
 // 外部定义 ::= 外部变量定义 |
 //              函数定义 |
+//              函数声明 |
 //              预处理语句
 // 有一个儿子节点
 static Node parse_external_decl(TokenStream *s) {
@@ -495,23 +496,22 @@ static Node parse_for(TokenStream *s) {
                 "(", "wrong 'for' statement");
     }
 
-    Node_add_son(res, parse_exp(s));
+    for (int i = 0; i < 3; ++i) {
+        if ((i < 2 && TS_peek(s, 0).type == SEMICOLON_T) ||
+                (i == 2 && TS_peek(s, 0).type == RIGHT_PARETHESIS_T)) {
+            Node_add_son(res, Node_new_normal(ND_EMPTY));
+        } else {
+            Node_add_son(res, parse_exp(s));
+        }
 
-    t = TS_get_token(s);
-    if (t.type != SEMICOLON_T) {
-        fmt_panic_with_expect(t.line, t.column, t.str,
-                ";", "wrong 'for' statement");
+        if (i < 2) {
+            t = TS_get_token(s);
+            if (t.type != SEMICOLON_T) {
+                fmt_panic_with_expect(t.line, t.column, t.str,
+                        ";", "wrong 'for' statement");
+            }
+        }
     }
-
-    Node_add_son(res, parse_exp(s));
-
-    t = TS_get_token(s);
-    if (t.type != SEMICOLON_T) {
-        fmt_panic_with_expect(t.line, t.column, t.str,
-                ";", "wrong 'for' statement");
-    }
-
-    Node_add_son(res, parse_exp(s));
 
     t = TS_get_token(s);
     if (t.type != RIGHT_PARETHESIS_T) {
