@@ -313,7 +313,11 @@ static Node parse_arg(TokenStream *s) {
     Lex_Token t = TS_peek(s, 0);
     Node_add_son(res, Node_new_leaf(TS_get_token(s)));
     if (t.type != VOID_T) {
-        Node_add_son(res, Node_new_leaf(TS_get_token(s)));
+        if (TS_peek(s, 1).type == LEFT_SQUARE_BRACKET_T) { // 形参中有数组
+            Node_add_son(res, parse_array(s));
+        } else {
+            Node_add_son(res, Node_new_leaf(TS_get_token(s)));
+        }
     }
     return res;
 }
@@ -613,11 +617,16 @@ static Node parse_array(TokenStream *s) {
     check_and_add_comment(res, s);
     Node_add_son(res, Node_new_leaf(TS_get_token(s)));
     TS_get_token(s);
-    Node_add_son(res, parse_exp(s));
+    if (TS_peek(s, 0).type == RIGHT_SQUARE_BRACKET_T) {
+        Node_add_son(res, Node_new_normal(ND_EMPTY));
+    } else {
+        TS_get_token(s);
+        Node_add_son(res, parse_exp(s));
+    }
     Lex_Token t = TS_get_token(s);
     if (t.type != RIGHT_SQUARE_BRACKET_T) {
         fmt_panic_with_expect(t.line, t.column, t.str,
-                "]", "wrong function call");
+                "]", "wrong array");
     }
 
     return res;

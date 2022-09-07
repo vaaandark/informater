@@ -56,13 +56,19 @@ static void fmt_external_var_decl(FILE *f, Node n) {
 }
 
 static void fmt_compound(FILE *, Node, int);
+static void fmt_array(FILE *, Node);
 
 // 格式化函数形式参数
 static void fmt_arg(FILE *f, Node n) {
     check_and_fmt_comment(n);
     fprintf(f, "%s", n->sons[0]->token.str);
     if (n->sons[0]->token.type != VOID_T) {
-        fprintf(f, " %s", n->sons[1]->token.str);
+        if (n->sons[1]->t == ND_ARRAY) {
+            fprintf(f, " ");
+            fmt_array(f, n->sons[1]);
+        } else {
+            fprintf(f, " %s", n->sons[1]->token.str);
+        }
     }
 }
 
