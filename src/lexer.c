@@ -88,8 +88,7 @@ const Lex_RegexTable regex_and_action[] = {
     { "(\\.)", "dot", DOT_T },
     { "(->)", "arrow", ARROW_T },
     { "(#(\\\\\n|[^\n])*)", "preprocessor command", PREPROCESSOR_COMMAND_T },
-    { "(\\n)", "\n", NEWLINE_T },
-    { "([[:space:]]+)", "", SPACE_T }
+    { "([[:space:]])", "", SPACE_T }
 };
 
 #define rule_num ((int)(sizeof(regex_and_action) / sizeof(*regex_and_action)))
@@ -164,17 +163,6 @@ static inline void Lex_Token_drop(Lex_Token *t) {
     free(t->str);
 }
 
-static inline bool another_line(char *s, char **place) {
-    while (*s != '\0') {
-        if (*s == '\n') {
-            *place = s;
-            return true;
-        }
-        s++;
-    }
-    return false;
-}
-
 Lex_TokenState Lex_lexer_go(const char *filename) {
     char *pos;
     char *buf;
@@ -212,16 +200,13 @@ Lex_TokenState Lex_lexer_go(const char *filename) {
         tmp = pos[matched_len];
         pos[matched_len] = '\0';
         if (*regex_and_action[matched_item].token_name != '\0') {
-            if (regex_and_action[matched_item].type != NEWLINE_T) {
-                LexS_add_token(&st, Lex_Token_new(line, pos - line_begin_pos,
-                            pos, regex_and_action[matched_item].type,
-                            regex_and_action[matched_item].token_name));
-            }
-            char *place = pos + matched_len;
-            if (another_line(pos, &place) || tmp == '\n') {
-                line++;
-                line_begin_pos = place;
-            }
+            LexS_add_token(&st, Lex_Token_new(line, pos - line_begin_pos,
+                        pos, regex_and_action[matched_item].type,
+                        regex_and_action[matched_item].token_name));
+        }
+        if (tmp == '\n') {
+            line++;
+            line_begin_pos = pos + matched_len;
         }
         pos[matched_len] = tmp;
         pos += matched_len;
