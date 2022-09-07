@@ -620,7 +620,6 @@ static Node parse_array(TokenStream *s) {
     if (TS_peek(s, 0).type == RIGHT_SQUARE_BRACKET_T) {
         Node_add_son(res, Node_new_normal(ND_EMPTY));
     } else {
-        TS_get_token(s);
         Node_add_son(res, parse_exp(s));
     }
     Lex_Token t = TS_get_token(s);
