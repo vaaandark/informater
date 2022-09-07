@@ -32,6 +32,7 @@ $ make all # 如果使用 clang 可以加上 CC=clang
 Usage: informater [options] file...
 Options:
   -h                display this information
+  -l                display lex information
   -o after-file     redirect output to after-file
   -t ast-graph      generate a dot image with AST
 ```

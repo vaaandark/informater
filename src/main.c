@@ -61,6 +61,7 @@ void help(void) {
     printf("Usage: informater [options] file...\n");
     printf("Options:\n");
     printf("  -h                display this information\n");
+    printf("  -l                display lex information\n");
     printf("  -o after-file     redirect output to after-file\n");
     printf("  -t ast-graph      generate a dot image with AST\n");
 }
@@ -76,13 +77,18 @@ int main(int argc, char *argv[]) {
 
     bool redirect = false;
     bool generate_ast = false;
+    bool lex_display = false;
 
     int opt;
-    while ((opt = getopt(argc, argv, "ho:t:")) != -1) {
+    while ((opt = getopt(argc, argv, "hlo:t:")) != -1) {
         switch (opt) {
         case 'h':
             help();
             exit(0);
+            break;
+        case 'l':
+            lex_display = true;
+            break;
         case 'o':
             redirect = true;
             fp = fopen(optarg, "w");
@@ -109,16 +115,25 @@ int main(int argc, char *argv[]) {
 
     Lex_TokenState st = Lex_lexer_go(argv[optind]);
 
+    // 输出词法信息
+    if (lex_display) {
+        LexS_display(stdout, &st);
+        LexS_drop(&st);
+        return 0;
+    }
+
     Node n = parser_go(st);
+
+    // 生成 AST
     if (generate_ast) {
         AST2graph(fp_dot, n);
         fclose(fp_dot);
     }
 
+    // 格式化
     formater_go(fp, n);
 
     Node_drop(n);
-
     LexS_drop(&st);
 
     if (redirect) {
